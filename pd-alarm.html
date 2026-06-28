@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#060d1a">
+<title>PD Alarm Monitör</title>
+
+<!-- Firebase -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-database-compat.min.js"></script>
+<!-- QR Code -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!-- QR Scanner -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #060d1a;
+  --bg2: #0c1829;
+  --bg3: #112040;
+  --border: #1e3a5f;
+  --accent: #00c8ff;
+  --accent-dim: #00c8ff33;
+  --green: #00e5a0;
+  --green-dim: #00e5a022;
+  --red: #ff3d5a;
+  --red-dim: #ff3d5a22;
+  --yellow: #ffd166;
+  --yellow-dim: #ffd16622;
+  --text: #c8daf0;
+  --text-dim: #5a7a9a;
+  --radius: 16px;
+  --shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── SCREENS ── */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  overflow-y: auto;
+}
+.screen.active {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* ── SPLASH ── */
+#splash {
+  background: radial-gradient(ellipse at 50% 40%, #0a2040 0%, #060d1a 70%);
+  gap: 20px;
+}
+.splash-logo {
+  width: 90px; height: 90px;
+  background: var(--accent-dim);
+  border: 2px solid var(--accent);
+  border-radius: 24px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 40px;
+  box-shadow: 0 0 40px var(--accent-dim), inset 0 0 20px var(--accent-dim);
+  animation: pulse-logo 2s ease-in-out infinite;
+}
+@keyframes pulse-logo {
+  0%,100% { box-shadow: 0 0 40px var(--accent-dim), inset 0 0 20px var(--accent-dim); }
+  50% { box-shadow: 0 0 60px #00c8ff55, inset 0 0 30px #00c8ff33; }
+}
+.splash-title {
+  font-size: 28px; font-weight: 700; letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #00c8ff, #00e5a0);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.splash-sub { font-size: 14px; color: var(--text-dim); text-align: center; max-width: 280px; }
+.splash-warning {
+  background: var(--yellow-dim);
+  border: 1px solid var(--yellow);
+  border-radius: 12px;
+  padding: 14px 18px;
+  font-size: 12px;
+  color: var(--yellow);
+  text-align: center;
+  max-width: 320px;
+  line-height: 1.6;
+}
+.mode-cards { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 360px; }
+.mode-card {
+  background: var(--bg2);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex; align-items: center; gap: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+.mode-card:active { transform: scale(0.97); }
+.mode-card.listener { border-color: var(--accent); background: var(--accent-dim); }
+.mode-card.receiver { border-color: var(--green); background: var(--green-dim); }
+.mode-icon { font-size: 36px; flex-shrink: 0; }
+.mode-title { font-size: 17px; font-weight: 700; }
+.mode-desc { font-size: 12px; color: var(--text-dim); margin-top: 4px; line-height: 1.5; }
+.mode-card.listener .mode-title { color: var(--accent); }
+.mode-card.receiver .mode-title { color: var(--green); }
+
+/* ── SETUP ── */
+#setup { gap: 20px; }
+.setup-header { text-align: center; }
+.setup-header h2 { font-size: 22px; font-weight: 700; }
+.setup-header p { font-size: 13px; color: var(--text-dim); margin-top: 6px; }
+
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  width: 100%; max-width: 380px;
+}
+.card-title { font-size: 13px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
+
+.room-code {
+  font-family: 'Space Mono', monospace;
+  font-size: 36px; font-weight: 700;
+  letter-spacing: 8px;
+  color: var(--accent);
+  text-align: center;
+  margin: 10px 0;
+}
+
+#qr-container {
+  display: flex; justify-content: center; margin: 10px 0;
+  background: white; border-radius: 12px; padding: 14px;
+}
+
+.btn {
+  width: 100%; padding: 16px;
+  border: none; border-radius: 12px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 16px; font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--accent); color: #060d1a; }
+.btn-green { background: var(--green); color: #060d1a; }
+.btn-danger { background: var(--red); color: white; }
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 14px; padding: 12px;
+}
+
+/* Receiver setup */
+.scan-area {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  height: 220px;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 10px;
+  cursor: pointer;
+  position: relative; overflow: hidden;
+}
+.scan-area video { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; }
+.scan-label { font-size: 13px; color: var(--text-dim); text-align: center; }
+
+.or-divider { display: flex; align-items: center; gap: 10px; color: var(--text-dim); font-size: 13px; }
+.or-divider::before, .or-divider::after { content:''; flex:1; height:1px; background: var(--border); }
+
+.input-row { display: flex; gap: 8px; }
+input[type="text"] {
+  flex: 1; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px;
+  color: var(--text); font-family: 'Space Mono', monospace;
+  font-size: 18px; letter-spacing: 4px; text-align: center;
+  outline: none;
+}
+input[type="text"]:focus { border-color: var(--green); }
+
+/* ── LISTENER SCREEN ── */
+#listener-screen { gap: 0; padding: 16px; justify-content: flex-start; }
+.top-bar {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0 16px;
+}
+.top-bar-title { font-size: 16px; font-weight: 700; }
+.status-pill {
+  padding: 6px 14px; border-radius: 100px;
+  font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; gap: 6px;
+}
+.status-pill.active { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+.status-pill.inactive { background: var(--red-dim); color: var(--red); border: 1px solid var(--red); }
+.status-pill.connecting { background: var(--yellow-dim); color: var(--yellow); border: 1px solid var(--yellow); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.dot.pulse { animation: dot-pulse 1s infinite; }
+@keyframes dot-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.vis-container {
+  width: 100%; height: 100px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; position: relative;
+  margin-bottom: 14px;
+}
+canvas { width: 100%; height: 100%; }
+.vis-label {
+  position: absolute; bottom: 8px; left: 12px;
+  font-size: 11px; color: var(--text-dim);
+  font-family: 'Space Mono', monospace;
+}
+
+.stats-row { display: flex; gap: 10px; width: 100%; margin-bottom: 14px; }
+.stat-box {
+  flex: 1; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px; text-align: center;
+}
+.stat-val { font-size: 24px; font-weight: 700; font-family: 'Space Mono', monospace; }
+.stat-lbl { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+.stat-box.alarm .stat-val { color: var(--red); }
+.stat-box.active-s .stat-val { color: var(--green); }
+.stat-box.conn .stat-val { color: var(--accent); font-size: 16px; }
+
+.sensitivity-card {
+  width: 100%; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px; margin-bottom: 14px;
+}
+.sens-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.sens-title { font-size: 13px; color: var(--text-dim); }
+.sens-val { font-size: 13px; color: var(--accent); font-family: 'Space Mono', monospace; }
+input[type="range"] {
+  width: 100%; appearance: none; -webkit-appearance: none;
+  height: 4px; border-radius: 2px;
+  background: linear-gradient(to right, var(--accent) var(--pct, 50%), var(--bg3) var(--pct, 50%));
+  outline: none; cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none; -webkit-appearance: none;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--accent); border: 3px solid var(--bg);
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.freq-bar-container {
+  display: flex; align-items: flex-end; gap: 2px; height: 36px;
+  margin-top: 12px;
+}
+.freq-bar {
+  flex: 1; background: var(--accent-dim); border-radius: 2px;
+  transition: height 0.1s ease;
+  min-height: 2px;
+}
+.freq-bar.active { background: var(--accent); }
+
+.history-card {
+  width: 100%; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px; flex: 1; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.history-title { font-size: 13px; color: var(--text-dim); margin-bottom: 12px; }
+.history-list { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.history-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--bg3); font-size: 13px;
+}
+.history-item.alarm { border-left: 3px solid var(--red); }
+.history-item.info { border-left: 3px solid var(--accent); }
+.history-item.warn { border-left: 3px solid var(--yellow); }
+.hi-icon { font-size: 16px; flex-shrink: 0; }
+.hi-text { flex: 1; }
+.hi-time { font-size: 11px; color: var(--text-dim); font-family: 'Space Mono', monospace; }
+
+.night-btn {
+  position: fixed; bottom: 20px; right: 20px;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--bg3); border: 1px solid var(--border);
+  font-size: 24px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow);
+  transition: all 0.2s;
+}
+.night-btn:active { transform: scale(0.9); }
+
+/* ── RECEIVER SCREEN ── */
+#receiver-screen { gap: 0; padding: 16px; justify-content: flex-start; }
+
+.recv-status {
+  width: 100%; border-radius: var(--radius); padding: 24px;
+  text-align: center; margin-bottom: 14px;
+  border: 2px solid var(--border);
+  background: var(--bg2);
+  transition: all 0.3s ease;
+}
+.recv-status.ok { border-color: var(--green); background: var(--green-dim); }
+.recv-status.alarm { border-color: var(--red); background: var(--red-dim); animation: alarm-pulse 0.5s ease-in-out infinite; }
+.recv-status.warning { border-color: var(--yellow); background: var(--yellow-dim); }
+@keyframes alarm-pulse {
+  0%,100% { box-shadow: 0 0 0 0 #ff3d5a33; }
+  50% { box-shadow: 0 0 0 20px #ff3d5a00; }
+}
+.recv-icon { font-size: 64px; margin-bottom: 10px; }
+.recv-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+.recv-sub { font-size: 13px; color: var(--text-dim); }
+.recv-status.alarm .recv-title { color: var(--red); }
+.recv-status.ok .recv-title { color: var(--green); }
+.recv-status.warning .recv-title { color: var(--yellow); }
+
+.listener-health {
+  width: 100%; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 14px;
+}
+.lh-icon { font-size: 28px; }
+.lh-text { flex: 1; }
+.lh-title { font-size: 14px; font-weight: 600; }
+.lh-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.lh-time { font-size: 12px; font-family: 'Space Mono', monospace; color: var(--accent); }
+
+/* ── NIGHT MODE ── */
+#night-overlay {
+  position: fixed; inset: 0;
+  background: #000;
+  display: none; align-items: center; justify-content: center;
+  flex-direction: column; gap: 10px; z-index: 999;
+  cursor: pointer;
+}
+#night-overlay.active { display: flex; }
+.night-clock {
+  font-family: 'Space Mono', monospace;
+  font-size: 48px; color: #1a2a3a;
+  letter-spacing: 4px;
+}
+.night-hint { font-size: 13px; color: #1a2a3a; }
+.night-alarm-active .night-clock { color: var(--red) !important; animation: night-alarm 0.5s infinite; }
+@keyframes night-alarm { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+/* ── ALARM OVERLAY ── */
+#alarm-overlay {
+  position: fixed; inset: 0;
+  background: #1a000a;
+  display: none; align-items: center; justify-content: center;
+  flex-direction: column; gap: 20px; z-index: 1000;
+  animation: alarm-bg 0.5s ease-in-out infinite;
+}
+#alarm-overlay.active { display: flex; }
+@keyframes alarm-bg {
+  0%,100%{background:#1a000a} 50%{background:#2d0015}
+}
+.alarm-icon { font-size: 80px; animation: bounce 0.5s infinite; }
+@keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+.alarm-title { font-size: 32px; font-weight: 800; color: var(--red); text-align: center; }
+.alarm-sub { font-size: 16px; color: #ff8fa0; text-align: center; }
+.alarm-time { font-family: 'Space Mono', monospace; font-size: 14px; color: #ff6080; }
+.btn-stop-alarm { 
+  background: white; color: var(--red);
+  font-size: 18px; font-weight: 800;
+  padding: 20px 40px; border-radius: 100px; border: none;
+  cursor: pointer; width: 280px;
+}
+
+/* ── UTILITIES ── */
+.hidden { display: none !important; }
+.flex-col { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 380px; }
+.back-btn {
+  position: absolute; top: 20px; left: 20px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px 14px;
+  font-size: 13px; cursor: pointer; color: var(--text-dim);
+}
+
+.room-badge {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px 10px;
+  font-family: 'Space Mono', monospace; font-size: 12px; color: var(--text-dim);
+}
+
+.scrollable { overflow-y: auto; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ SPLASH / MODE SEÇİMİ ═══════════════ -->
+<div id="splash" class="screen active">
+  <div class="splash-logo">💊</div>
+  <div class="splash-title">PD Alarm Monitör</div>
+  <div class="splash-sub">Periton Diyaliz Cihazı Alarm İzleme Sistemi</div>
+  <div class="splash-warning">
+    ⚠️ Bu uygulama yardımcı bir araçtır.<br>
+    Cihazınızın resmi alarm sistemi her zaman birincil güvenlik kaynağınızdır.
+  </div>
+  <div class="mode-cards">
+    <div class="mode-card listener" onclick="selectMode('listener')">
+      <div class="mode-icon">🎙️</div>
+      <div>
+        <div class="mode-title">Dinleyici Modu</div>
+        <div class="mode-desc">Bu telefon cihazın yanında durur, alarm sesini dinler ve alıcıya bildirim gönderir.</div>
+      </div>
+    </div>
+    <div class="mode-card receiver" onclick="selectMode('receiver')">
+      <div class="mode-icon">🔔</div>
+      <div>
+        <div class="mode-title">Alıcı Modu</div>
+        <div class="mode-desc">Bu telefon sizinle olur. Alarm geldiğinde yüksek sesle uyarır ve ekranda bildirim gösterir.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ DİNLEYİCİ SETUP ═══════════════ -->
+<div id="listener-setup" class="screen">
+  <button class="back-btn" onclick="goBack()">← Geri</button>
+  <div class="setup-header">
+    <h2>🎙️ Dinleyici Kurulumu</h2>
+    <p>Bu kodu alıcı telefonla eşleştirin</p>
+  </div>
+  <div class="flex-col">
+    <div class="card">
+      <div class="card-title">Oda Kodu</div>
+      <div class="room-code" id="room-code-display">——————</div>
+      <div id="qr-container"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Durum</div>
+      <div id="setup-status" style="font-size:14px;color:var(--text-dim);text-align:center;padding:8px 0;">Bağlantı kuruluyor...</div>
+    </div>
+    <button class="btn btn-primary" id="start-listen-btn" onclick="startListening()" disabled>
+      🎙️ Dinlemeyi Başlat
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════ ALICI SETUP ═══════════════ -->
+<div id="receiver-setup" class="screen">
+  <button class="back-btn" onclick="goBack()">← Geri</button>
+  <div class="setup-header">
+    <h2>🔔 Alıcı Kurulumu</h2>
+    <p>Dinleyici telefonun QR kodunu okutun</p>
+  </div>
+  <div class="flex-col">
+    <div class="card">
+      <div class="card-title">QR Kod Tara</div>
+      <div class="scan-area" id="qr-reader-container">
+        <div style="text-align:center">
+          <div style="font-size:40px">📷</div>
+          <div class="scan-label">QR kodu taramak için<br>buraya dokunun</div>
+        </div>
+      </div>
+    </div>
+    <div class="or-divider">veya</div>
+    <div class="card">
+      <div class="card-title">Kodu Elle Girin</div>
+      <div class="input-row">
+        <input type="text" id="manual-code" placeholder="000000" maxlength="6">
+        <button class="btn btn-green" style="width:auto;padding:12px 16px" onclick="connectWithCode()">Bağlan</button>
+      </div>
+    </div>
+    <div id="recv-connect-status" class="hidden card" style="text-align:center;color:var(--text-dim);font-size:14px;"></div>
+  </div>
+</div>
+
+<!-- ═══════════════ DİNLEYİCİ ANA EKRAN ═══════════════ -->
+<div id="listener-screen" class="screen">
+  <div class="top-bar">
+    <div>
+      <div class="top-bar-title">🎙️ Dinleyici</div>
+      <div class="room-badge" id="listener-room-badge">——</div>
+    </div>
+    <div id="listener-status-pill" class="status-pill inactive">
+      <div class="dot"></div> Bekleniyor
+    </div>
+  </div>
+
+  <!-- Ses görselleştirme -->
+  <div class="vis-container">
+    <canvas id="waveform-canvas"></canvas>
+    <div class="vis-label" id="db-label">— dB</div>
+  </div>
+
+  <!-- İstatistikler -->
+  <div class="stats-row">
+    <div class="stat-box alarm">
+      <div class="stat-val" id="alarm-count">0</div>
+      <div class="stat-lbl">Alarm</div>
+    </div>
+    <div class="stat-box active-s">
+      <div class="stat-val" id="uptime-display">00:00</div>
+      <div class="stat-lbl">Süre</div>
+    </div>
+    <div class="stat-box conn">
+      <div class="stat-val" id="conn-type">—</div>
+      <div class="stat-lbl">Bağlantı</div>
+    </div>
+  </div>
+
+  <!-- Hassasiyet -->
+  <div class="sensitivity-card">
+    <div class="sens-header">
+      <span class="sens-title">🎚️ Hassasiyet</span>
+      <span class="sens-val" id="sens-display">50%</span>
+    </div>
+    <input type="range" id="sensitivity-range" min="10" max="90" value="50" oninput="updateSensitivity(this.value)">
+    <div class="freq-bar-container" id="freq-bars"></div>
+  </div>
+
+  <!-- Geçmiş -->
+  <div class="history-card">
+    <div class="history-title">📋 Olay Geçmişi</div>
+    <div class="history-list" id="history-list">
+      <div style="text-align:center;color:var(--text-dim);font-size:13px;padding:20px">Henüz olay yok</div>
+    </div>
+  </div>
+
+  <!-- Gece modu butonu -->
+  <button class="night-btn" onclick="toggleNightMode()" title="Gece Modu">🌙</button>
+</div>
+
+<!-- ═══════════════ ALICI ANA EKRAN ═══════════════ -->
+<div id="receiver-screen" class="screen">
+  <div class="top-bar">
+    <div>
+      <div class="top-bar-title">🔔 Alıcı</div>
+      <div class="room-badge" id="receiver-room-badge">——</div>
+    </div>
+    <div id="receiver-status-pill" class="status-pill connecting">
+      <div class="dot pulse"></div> Bağlanıyor
+    </div>
+  </div>
+
+  <!-- Ana durum -->
+  <div class="recv-status ok" id="recv-status-box">
+    <div class="recv-icon" id="recv-icon">✅</div>
+    <div class="recv-title" id="recv-title">Sistem Normal</div>
+    <div class="recv-sub" id="recv-sub">Dinleyici aktif, alarm yok</div>
+  </div>
+
+  <!-- Dinleyici sağlığı -->
+  <div class="listener-health" id="listener-health">
+    <div class="lh-icon">📡</div>
+    <div class="lh-text">
+      <div class="lh-title">Dinleyici Durumu</div>
+      <div class="lh-sub" id="lh-sub">Bağlantı bekleniyor...</div>
+    </div>
+    <div class="lh-time" id="lh-time">—</div>
+  </div>
+
+  <!-- Geçmiş -->
+  <div class="history-card" style="flex:1">
+    <div class="history-title">📋 Alarm Geçmişi</div>
+    <div class="history-list" id="recv-history-list">
+      <div style="text-align:center;color:var(--text-dim);font-size:13px;padding:20px">Henüz alarm yok</div>
+    </div>
+  </div>
+
+  <div style="width:100%;margin-top:10px">
+    <button class="btn btn-ghost" onclick="testAlarm()">🔔 Test Alarmı</button>
+  </div>
+</div>
+
+<!-- ═══════════════ GECE MODU OVERLAY ═══════════════ -->
+<div id="night-overlay" onclick="toggleNightMode()">
+  <div class="night-clock" id="night-clock">00:00</div>
+  <div class="night-hint">Dokunarak uyandır</div>
+</div>
+
+<!-- ═══════════════ ALARM OVERLAY ═══════════════ -->
+<div id="alarm-overlay">
+  <div class="alarm-icon">🚨</div>
+  <div class="alarm-title">ALARM!</div>
+  <div class="alarm-sub">Periton Diyaliz Cihazı<br>Dikkat Gerektiriyor</div>
+  <div class="alarm-time" id="alarm-overlay-time"></div>
+  <button class="btn-stop-alarm" onclick="stopAlarm()">✋ Alarmı Durdur</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  FIREBASE CONFIGURATION
+//  ⚠️ Kendi Firebase projenizi buraya ekleyin!
+//  firebase.google.com → Yeni Proje → Realtime Database
+// ═══════════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAGZqeOkRzGVBfj4u9arncdOcokjlX1mfU",
+  authDomain: "pd-alarm.firebaseapp.com",
+  databaseURL: "https://pd-alarm-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "pd-alarm",
+  storageBucket: "pd-alarm.firebasestorage.app",
+  messagingSenderId: "199547042678",
+  appId: "1:199547042678:web:3d3aaf852ca18c4d759857",
+  measurementId: "G-N0MZH53XDX"
+};
+
+// ═══════════════════════════════════════════════════
+//  GLOBALS
+// ═══════════════════════════════════════════════════
+let currentMode = null;
+let roomCode = null;
+let db = null;
+let audioCtx = null;
+let analyser = null;
+let micStream = null;
+let animFrame = null;
+let sensitivity = 50; // 0-100
+let alarmCount = 0;
+let startTime = null;
+let uptimeInterval = null;
+let heartbeatInterval = null;
+let historyItems = [];
+let isNightMode = false;
+let isAlarmActive = false;
+let alarmAudio = null;
+let alarmInterval = null;
+let qrScanner = null;
+let firebaseOK = false;
+let lastHeartbeat = null;
+let heartbeatCheckInterval = null;
+let connType = 'Firebase';
+
+// Bip algılama state
+let bipDetectState = {
+  lastBipTime: 0,
+  bipCount: 0,
+  inCooldown: false,
+  freqData: new Float32Array(256),
+};
+
+// ═══════════════════════════════════════════════════
+//  FIREBASE INIT
+// ═══════════════════════════════════════════════════
+function initFirebase() {
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+    firebaseOK = true;
+    connType = 'Firebase';
+    console.log('Firebase bağlandı');
+  } catch(e) {
+    console.warn('Firebase başlatılamadı:', e);
+    firebaseOK = false;
+    connType = 'Yerel';
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  SCREEN NAVIGATION
+// ═══════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function goBack() {
+  stopListening();
+  showScreen('splash');
+}
+
+function selectMode(mode) {
+  currentMode = mode;
+  if (mode === 'listener') {
+    roomCode = generateCode();
+    document.getElementById('room-code-display').textContent = roomCode;
+    document.getElementById('listener-room-badge').textContent = roomCode;
+    generateQR();
+    initFirebase();
+    setupListenerRoom();
+    showScreen('listener-setup');
+  } else {
+    showScreen('receiver-setup');
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  ROOM CODE
+// ═══════════════════════════════════════════════════
+function generateCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function generateQR() {
+  const container = document.getElementById('qr-container');
+  container.innerHTML = '';
+  const data = JSON.stringify({ code: roomCode, app: 'pd-alarm' });
+  new QRCode(container, { text: data, width: 180, height: 180, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M });
+}
+
+// ═══════════════════════════════════════════════════
+//  LISTENER SETUP
+// ═══════════════════════════════════════════════════
+function setupListenerRoom() {
+  const statusEl = document.getElementById('setup-status');
+  const startBtn = document.getElementById('start-listen-btn');
+
+  if (firebaseOK && db) {
+    db.ref(`rooms/${roomCode}/meta`).set({ created: Date.now(), listener: 'waiting' });
+    statusEl.textContent = '✅ Oda hazır. Alıcı bağlantısı bekleniyor...';
+    statusEl.style.color = 'var(--green)';
+    startBtn.disabled = false;
+
+    // Alıcının bağlandığını izle
+    db.ref(`rooms/${roomCode}/receiver`).on('value', snap => {
+      if (snap.val()) {
+        statusEl.textContent = '🔗 Alıcı bağlandı! Dinlemeyi başlatabilirsiniz.';
+        addHistory('info', '📱 Alıcı telefon bağlandı', 'listener');
+      }
+    });
+  } else {
+    statusEl.textContent = '⚠️ Firebase yapılandırılmadı. Demo modunda çalışıyor.';
+    statusEl.style.color = 'var(--yellow)';
+    startBtn.disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  MİKROFON & DİNLEME
+// ═══════════════════════════════════════════════════
+async function startListening() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    micStream = stream;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.3;
+    const src = audioCtx.createMediaStreamSource(stream);
+    src.connect(analyser);
+
+    showScreen('listener-screen');
+    startTime = Date.now();
+    updateUptimeDisplay();
+    uptimeInterval = setInterval(updateUptimeDisplay, 1000);
+    sendHeartbeat();
+    heartbeatInterval = setInterval(sendHeartbeat, 30000);
+
+    // Freq bars oluştur
+    const fbContainer = document.getElementById('freq-bars');
+    fbContainer.innerHTML = '';
+    for (let i = 0; i < 32; i++) {
+      const b = document.createElement('div');
+      b.className = 'freq-bar';
+      b.id = `fb-${i}`;
+      fbContainer.appendChild(b);
+    }
+
+    document.getElementById('conn-type').textContent = connType;
+    setPill('listener-status-pill', 'active', '🎙️ Dinliyor');
+    addHistory('info', '🎙️ Dinleme başlatıldı', 'listener');
+    analyzeAudio();
+  } catch(e) {
+    alert('Mikrofon erişimi reddedildi. Lütfen izin verin.');
+    console.error(e);
+  }
+}
+
+function stopListening() {
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+  clearInterval(uptimeInterval);
+  clearInterval(heartbeatInterval);
+}
+
+// ═══════════════════════════════════════════════════
+//  SES ANALİZİ & BİP TANIMA
+// ═══════════════════════════════════════════════════
+function analyzeAudio() {
+  const bufLen = analyser.frequencyBinCount;
+  const dataArr = new Uint8Array(bufLen);
+  const freqArr = new Float32Array(bufLen);
+  const canvas = document.getElementById('waveform-canvas');
+  const ctx = canvas.getContext('2d');
+  const dbLabel = document.getElementById('db-label');
+
+  function draw() {
+    animFrame = requestAnimationFrame(draw);
+    analyser.getByteTimeDomainData(dataArr);
+    analyser.getFloatFrequencyData(freqArr);
+
+    // Dalga formu çiz
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#00c8ff44';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    const sliceW = canvas.width / bufLen;
+    let x = 0;
+    for (let i = 0; i < bufLen; i++) {
+      const v = dataArr[i] / 128.0;
+      const y = v * canvas.height / 2;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      x += sliceW;
+    }
+    ctx.stroke();
+
+    // dB hesapla
+    let sum = 0;
+    for (let i = 0; i < bufLen; i++) { const v = (dataArr[i] - 128) / 128; sum += v * v; }
+    const rms = Math.sqrt(sum / bufLen);
+    const db = rms > 0 ? 20 * Math.log10(rms) : -100;
+    dbLabel.textContent = `${db.toFixed(1)} dB`;
+
+    // Frekans barları güncelle
+    const step = Math.floor(freqArr.length / 32);
+    for (let i = 0; i < 32; i++) {
+      const val = Math.max(0, (freqArr[i * step] + 100) / 100);
+      const bar = document.getElementById(`fb-${i}`);
+      if (bar) {
+        const h = Math.min(100, val * 100);
+        bar.style.height = h + '%';
+        bar.className = 'freq-bar' + (val > 0.3 ? ' active' : '');
+      }
+    }
+
+    // Bip tespiti: 800-1200 Hz bandı kontrol et
+    detectBip(freqArr, db);
+  }
+  draw();
+}
+
+function detectBip(freqArr, db) {
+  // Hassasiyet eşiği: 10 → -50dB, 90 → -20dB
+  const threshold = -50 + (sensitivity / 100) * 30;
+  const now = Date.now();
+
+  // 800-1200 Hz = Baxter bip frekansı (44100Hz @ 2048 fft)
+  const sampleRate = audioCtx.sampleRate;
+  const binSize = sampleRate / analyser.fftSize;
+  const lowBin = Math.floor(800 / binSize);
+  const highBin = Math.floor(1200 / binSize);
+
+  let bipEnergy = -Infinity;
+  for (let i = lowBin; i <= highBin; i++) {
+    if (freqArr[i] > bipEnergy) bipEnergy = freqArr[i];
+  }
+
+  const isBip = bipEnergy > threshold && db > -50;
+
+  if (isBip && !bipDetectState.inCooldown) {
+    if (now - bipDetectState.lastBipTime < 3000) {
+      bipDetectState.bipCount++;
+    } else {
+      bipDetectState.bipCount = 1;
+    }
+    bipDetectState.lastBipTime = now;
+
+    // 2+ tekrarlayan bip → alarm
+    if (bipDetectState.bipCount >= 2) {
+      bipDetectState.inCooldown = true;
+      bipDetectState.bipCount = 0;
+      setTimeout(() => { bipDetectState.inCooldown = false; }, 10000);
+      triggerAlarmDetected();
+    }
+  }
+}
+
+function triggerAlarmDetected() {
+  alarmCount++;
+  document.getElementById('alarm-count').textContent = alarmCount;
+  setPill('listener-status-pill', 'inactive', '🚨 ALARM!');
+  addHistory('alarm', '🚨 Alarm sesi algılandı', 'listener');
+  sendAlarmSignal();
+  setTimeout(() => setPill('listener-status-pill', 'active', '🎙️ Dinliyor'), 8000);
+}
+
+// ═══════════════════════════════════════════════════
+//  FIREBASE HABERLEŞME
+// ═══════════════════════════════════════════════════
+function sendAlarmSignal() {
+  if (!firebaseOK || !db) return;
+  db.ref(`rooms/${roomCode}/alarm`).set({ time: Date.now(), count: alarmCount });
+}
+
+function sendHeartbeat() {
+  if (!firebaseOK || !db) return;
+  db.ref(`rooms/${roomCode}/heartbeat`).set({ time: Date.now(), uptime: Date.now() - startTime });
+}
+
+// ═══════════════════════════════════════════════════
+//  ALICI BAĞLANTI
+// ═══════════════════════════════════════════════════
+function connectWithCode(code) {
+  const inputCode = code || document.getElementById('manual-code').value.trim();
+  if (inputCode.length !== 6) { alert('Lütfen 6 haneli kodu girin'); return; }
+  roomCode = inputCode;
+  initFirebase();
+  document.getElementById('receiver-room-badge').textContent = roomCode;
+
+  if (firebaseOK && db) {
+    const statusEl = document.getElementById('recv-connect-status');
+    statusEl.classList.remove('hidden');
+    statusEl.textContent = '⏳ Bağlanılıyor...';
+
+    db.ref(`rooms/${roomCode}/meta`).once('value', snap => {
+      if (snap.val()) {
+        db.ref(`rooms/${roomCode}/receiver`).set({ connected: Date.now() });
+        showReceiverScreen();
+      } else {
+        statusEl.textContent = '❌ Oda bulunamadı. Kodu kontrol edin.';
+      }
+    });
+  } else {
+    // Demo modu
+    showReceiverScreen();
+  }
+}
+
+function showReceiverScreen() {
+  showScreen('receiver-screen');
+  listenForAlarms();
+  listenForHeartbeat();
+}
+
+function listenForAlarms() {
+  if (!firebaseOK || !db) return;
+
+  db.ref(`rooms/${roomCode}/alarm`).on('value', snap => {
+    const val = snap.val();
+    if (!val) return;
+    const age = Date.now() - val.time;
+    if (age < 30000) { // 30 saniyeden yeni
+      triggerReceiverAlarm(val);
+    }
+  });
+}
+
+function listenForHeartbeat() {
+  if (!firebaseOK || !db) return;
+
+  db.ref(`rooms/${roomCode}/heartbeat`).on('value', snap => {
+    const val = snap.val();
+    if (!val) return;
+    lastHeartbeat = val.time;
+    updateListenerHealth();
+  });
+
+  // Heartbeat kontrolü - 2 dakika gelmediyse uyar
+  heartbeatCheckInterval = setInterval(() => {
+    if (lastHeartbeat && Date.now() - lastHeartbeat > 120000) {
+      setRecvStatus('warning', '⚠️', 'Bağlantı Zayıf', 'Dinleyiciden sinyal alınamıyor');
+      setPill('receiver-status-pill', 'connecting', '⚠️ Uyarı');
+      addRecvHistory('warn', '⚠️ Dinleyici sinyali kesildi');
+    }
+  }, 60000);
+}
+
+function updateListenerHealth() {
+  const el = document.getElementById('lh-sub');
+  const timeEl = document.getElementById('lh-time');
+  const ago = lastHeartbeat ? Math.floor((Date.now() - lastHeartbeat) / 1000) : null;
+  el.textContent = ago !== null ? (ago < 60 ? 'Aktif ve dinliyor' : `${ago}s önce sinyal geldi`) : 'Bekleniyor...';
+  if (lastHeartbeat) {
+    const d = new Date(lastHeartbeat);
+    timeEl.textContent = d.toLocaleTimeString('tr-TR');
+    setPill('receiver-status-pill', 'active', '✅ Bağlı');
+    setRecvStatus('ok', '✅', 'Sistem Normal', 'Dinleyici aktif, alarm yok');
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  ALARM - ALICI
+// ═══════════════════════════════════════════════════
+function triggerReceiverAlarm(val) {
+  isAlarmActive = true;
+  const overlay = document.getElementById('alarm-overlay');
+  overlay.classList.add('active');
+  document.getElementById('alarm-overlay-time').textContent = new Date(val.time).toLocaleTimeString('tr-TR');
+
+  // Night mode alarm
+  const nightOvl = document.getElementById('night-overlay');
+  nightOvl.classList.add('night-alarm-active');
+
+  // Ses çal
+  playAlarmSound();
+
+  // Titreşim
+  if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 1000, 200, 500]);
+
+  setRecvStatus('alarm', '🚨', 'ALARM!', 'Cihaz dikkat gerektiriyor');
+  addRecvHistory('alarm', '🚨 Alarm bildirimi alındı');
+}
+
+function stopAlarm() {
+  isAlarmActive = false;
+  document.getElementById('alarm-overlay').classList.remove('active');
+  document.getElementById('night-overlay').classList.remove('night-alarm-active');
+  stopAlarmSound();
+  if (navigator.vibrate) navigator.vibrate(0);
+  setRecvStatus('ok', '✅', 'Sistem Normal', 'Alarm durduruldu');
+}
+
+function testAlarm() {
+  triggerReceiverAlarm({ time: Date.now() });
+}
+
+// ═══════════════════════════════════════════════════
+//  ALARM SESİ
+// ═══════════════════════════════════════════════════
+function playAlarmSound() {
+  stopAlarmSound();
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  let playing = true;
+
+  function beep() {
+    if (!playing) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'square';
+    gain.gain.value = 0.8;
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+    setTimeout(() => { if(playing) beep(); }, 600);
+  }
+  beep();
+
+  alarmAudio = { ctx, stop: () => { playing = false; ctx.close(); } };
+}
+
+function stopAlarmSound() {
+  if (alarmAudio) { alarmAudio.stop(); alarmAudio = null; }
+}
+
+// ═══════════════════════════════════════════════════
+//  GECE MODU
+// ═══════════════════════════════════════════════════
+function toggleNightMode() {
+  if (isAlarmActive) { stopAlarm(); return; }
+  isNightMode = !isNightMode;
+  const overlay = document.getElementById('night-overlay');
+  overlay.classList.toggle('active', isNightMode);
+
+  if (isNightMode) {
+    updateNightClock();
+    nightClockInterval = setInterval(updateNightClock, 1000);
+    // Ekranı koru ama uygulama çalışsın
+    if ('wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').catch(()=>{});
+    }
+  } else {
+    clearInterval(nightClockInterval);
+  }
+}
+
+let nightClockInterval = null;
+function updateNightClock() {
+  const d = new Date();
+  document.getElementById('night-clock').textContent =
+    d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+}
+
+// ═══════════════════════════════════════════════════
+//  YARDIMCI FONKSİYONLAR
+// ═══════════════════════════════════════════════════
+function setPill(id, cls, text) {
+  const el = document.getElementById(id);
+  el.className = `status-pill ${cls}`;
+  el.innerHTML = `<div class="dot${cls==='active'?' pulse':''}"></div> ${text}`;
+}
+
+function setRecvStatus(cls, icon, title, sub) {
+  document.getElementById('recv-status-box').className = `recv-status ${cls}`;
+  document.getElementById('recv-icon').textContent = icon;
+  document.getElementById('recv-title').textContent = title;
+  document.getElementById('recv-sub').textContent = sub;
+}
+
+function updateSensitivity(val) {
+  sensitivity = parseInt(val);
+  document.getElementById('sens-display').textContent = val + '%';
+  const pct = ((val - 10) / 80 * 100) + '%';
+  document.getElementById('sensitivity-range').style.setProperty('--pct', pct);
+}
+
+function updateUptimeDisplay() {
+  if (!startTime) return;
+  const s = Math.floor((Date.now() - startTime) / 1000);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  document.getElementById('uptime-display').textContent =
+    h > 0 ? `${h}:${String(m%60).padStart(2,'0')}` : `${String(m).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+}
+
+function addHistory(type, text, where) {
+  const list = document.getElementById(where === 'listener' ? 'history-list' : 'recv-history-list');
+  if (list.children.length === 1 && list.children[0].style.textAlign === 'center') list.innerHTML = '';
+
+  const item = document.createElement('div');
+  item.className = `history-item ${type}`;
+  const icon = type === 'alarm' ? '🚨' : type === 'warn' ? '⚠️' : 'ℹ️';
+  const time = new Date().toLocaleTimeString('tr-TR');
+  item.innerHTML = `<div class="hi-icon">${icon}</div><div class="hi-text">${text}</div><div class="hi-time">${time}</div>`;
+  list.insertBefore(item, list.firstChild);
+
+  // Max 50 kayıt tut
+  while (list.children.length > 50) list.removeChild(list.lastChild);
+}
+
+function addRecvHistory(type, text) { addHistory(type, text, 'receiver'); }
+
+// ═══════════════════════════════════════════════════
+//  QR OKUYUCU
+// ═══════════════════════════════════════════════════
+function startQRScanner() {
+  const container = document.getElementById('qr-reader-container');
+  container.innerHTML = '<div id="qr-reader" style="width:100%"></div>';
+
+  qrScanner = new Html5Qrcode("qr-reader");
+  qrScanner.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 200, height: 200 } },
+    (text) => {
+      qrScanner.stop();
+      try {
+        const data = JSON.parse(text);
+        if (data.app === 'pd-alarm' && data.code) {
+          connectWithCode(data.code);
+        }
+      } catch(e) {
+        connectWithCode(text);
+      }
+    },
+    () => {}
+  ).catch(err => {
+    console.error('QR başlatılamadı:', err);
+    container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--red)">📷 Kamera erişimi reddedildi.<br>Kodu elle girin.</div>`;
+  });
+}
+
+document.getElementById('qr-reader-container').addEventListener('click', function() {
+  if (!qrScanner) startQRScanner();
+});
+
+// Hassasiyet slider başlangıç
+updateSensitivity(50);
+</script>
+</body>
+</html>
