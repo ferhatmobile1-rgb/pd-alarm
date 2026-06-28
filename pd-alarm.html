@@ -838,32 +838,33 @@ function analyzeAudio() {
 }
 
 function detectBip(freqArr, db) {
-  // Hassasiyet eşiği: 10 → -50dB, 90 → -20dB
-  const threshold = -50 + (sensitivity / 100) * 30;
+  // Hassasiyet esigi: 10 = -90dB, 90 = -30dB (cok genis aralik)
+  const threshold = -90 + (sensitivity / 100) * 60;
   const now = Date.now();
 
-  // 800-1200 Hz = Baxter bip frekansı (44100Hz @ 2048 fft)
+  // Genis frekans araligi: 400-3000 Hz (tum medikal bip sesleri)
   const sampleRate = audioCtx.sampleRate;
   const binSize = sampleRate / analyser.fftSize;
-  const lowBin = Math.floor(800 / binSize);
-  const highBin = Math.floor(1200 / binSize);
+  const lowBin = Math.floor(400 / binSize);
+  const highBin = Math.floor(3000 / binSize);
 
-  let bipEnergy = -Infinity;
+  let bipPeak = -Infinity;
   for (let i = lowBin; i <= highBin; i++) {
-    if (freqArr[i] > bipEnergy) bipEnergy = freqArr[i];
+    if (freqArr[i] > bipPeak) bipPeak = freqArr[i];
   }
 
-  const isBip = bipEnergy > threshold && db > -50;
+  // db esigini -80'e indirdik, cok uzaktan da algilayabilsin
+  const isBip = bipPeak > threshold && db > -80;
 
   if (isBip && !bipDetectState.inCooldown) {
-    if (now - bipDetectState.lastBipTime < 3000) {
+    if (now - bipDetectState.lastBipTime < 5000) {
       bipDetectState.bipCount++;
     } else {
       bipDetectState.bipCount = 1;
     }
     bipDetectState.lastBipTime = now;
 
-    // 2+ tekrarlayan bip → alarm
+    // 2+ tekrarlayan bip = alarm
     if (bipDetectState.bipCount >= 2) {
       bipDetectState.inCooldown = true;
       bipDetectState.bipCount = 0;
